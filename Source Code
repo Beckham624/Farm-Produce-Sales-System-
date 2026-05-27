@@ -1,0 +1,329 @@
+/*
+FARM PRODUCE SALES SYSTEM
+TEMB 1202 COMPUTING 2-GROUP B EVENING
+KYAMBOGO UNIVERSITY, 2026
+*/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define MAX_PRODUCE 100
+#define BULK_THRESHOLD 10
+#define BULK_DISCOUNT 0.10f
+#define LOW_STOCK_LVL 5
+#define PERISH_DAYS 7
+
+//DATA STRUCTURE
+typedef struct{
+int id;
+char name[50];
+char category[20];
+float costPrice;
+float sellingPrice;
+int quantity;
+int quantitySold;
+float totalRevenue;
+int isPerishable;
+char stockDate[12]; /*DD/MM/YYYY*/
+int daysInStock;
+} Produce;
+Produce inventory[MAX_PRODUCE];
+int produceCount = 0;
+
+//FORWARD DECLARATIONS
+int authenticate();
+void displayMenu();
+void addProduce();
+void searchProduce();
+void updateProduce();
+void deleteProduce();
+void sellProduce();
+void generateSalesReport();
+void displayAll();
+int findById(int id);
+int computeDayInStock(const char*dateStr);
+void clearBuffer();
+
+
+int main(){
+if (!authenticate()) return 1;
+int choice;
+do {
+    displayMenu();
+    printf("ENTER CHOICE:   ");
+    scanf("%d",&choice);
+    clearBuffer();
+    switch(choice){
+    case 1: addProduce();break;
+    case 2: searchProduce();break;
+    case 3: updateProduce();break;
+    case 4: deleteProduce();break;
+    case 5: sellProduce();break;
+    case 6: generateSalesReport();break;
+    case 7: displayAll();break;
+    case 0: printf("GOODBYE...!!\n");
+    }
+}while(choice !=0);
+return 0;
+}
+
+//authenticate()
+int authenticate(){
+char user[30],pass[30];
+const char*VALID_USER="admin";
+const char*VALID_PASS="farm2026";
+int attempts=0;
+
+while(attempts<3){
+    printf("\n=============================================================================\n");
+    printf("FARM PRODUCE SALES SYSTEM v1.0 \n");
+    printf("===============================================================================\n");
+    printf("USERNAME: ");
+    scanf("%29s",&user);
+    printf("PASSWORD: ");
+    scanf("%29s",&pass);
+    clearBuffer();
+    if (strcmp(user,VALID_USER)==0&&
+        strcmp(pass,VALID_PASS)==0){
+            printf("\n[OK] WELCOME, %s\n",user);
+            return 1;
+        }
+        attempts++;
+        printf("[X] WRONG CREDENTIALS. %d attempt(s) left.\n",3-attempts);
+}
+printf("[X] ACCOUNT LOCKED. Contact administrator.\n");
+return 0;
+}
+
+//displayMenu()
+void displayMenu(){
+printf("\n=======================================================================================\n");
+printf("MAIN MENU\n");
+printf("=========================================================================================\n");
+printf("1. REGISTER PRODUCE\n");
+printf("2. SEARCH PRODUCE\n");
+printf("3. UPDATE PRODUCE\n");
+printf("4. DELETE PRODUCE\n");
+printf("5. SELL PRODUCE\n");
+printf("6. SALES SUMMARY REPORT\n");
+printf("7. DISPLAY ALL PRODUCE\n");
+printf("0. EXIT\n");
+printf("-----------------------------------------------------------------------------------------\n");
+}
+
+//addProduce()
+void addProduce(){
+if (produceCount>=MAX_PRODUCE){
+    printf("[!] INVENTORY FULL. \n"); return;
+}
+Produce p;
+printf("\n---------------------------REGISTER NEW PRODUCE---------------------------------------\n");
+printf("PRODUCE ID: \n");
+scanf("%d",&p.id);
+clearBuffer();
+for (int i=0; i<produceCount; i++){
+    if (inventory[i].id==p.id){
+        printf("[!] ID %d ALREADY EXISTS.\n", p.id);return;
+    }
+}
+printf("NAME:  \n");
+fgets(p.name, 50,stdin);
+p.name[strcspn(p.name, "\n")]='\0';
+printf("CATEGORY:  \n");
+fgets(p.category,20,stdin);
+p.category[strcspn(p.category, "\n")]='\0';
+printf("COST PRICE:  \n");
+scanf("%f",&p.costPrice);
+printf("SELLING PRICE: \n");
+scanf("%f",&p.sellingPrice);
+printf("QUANTITY:  \n");
+scanf("%d",&p.quantity);
+printf("PERISHABLE? (1=YES 0=NO): \n");
+scanf("%d",&p.isPerishable);
+printf("STOCK DATE (DD/MM/YYYY): \n");
+scanf("%11s",&p.stockDate);
+clearBuffer();
+if (p.costPrice<=0 ||p.sellingPrice<=0 ||p.quantity<0){
+    printf("[!]INVALID PRICE OR QUANTITY. \n"); return;
+}
+p.quantitySold=0;
+p.totalRevenue=0.0f;
+p.daysInStock=computeDayInStock(p.stockDate);
+inventory[produceCount++]=p;
+printf("[+] '%s' REGISTERED SUCCESFULLY. \n",p.name);
+}
+//searchProduce()
+void searchProduce(){
+printf("\n SEARCH BY: 1)ID 2)NAME:");
+int opt;
+scanf("%d",&opt);
+clearBuffer();
+if (opt==1){
+    int id;
+    printf("ENTER ID:  \n");
+    scanf("%d",&id);
+    clearBuffer();
+    int idx=findById(id);
+    if(idx==-1){printf("[!] NOT FOUND.\n");return;}
+    Produce*p=&inventory[idx];
+    printf("\nID: %d |NAME: %s |CATEGORY: %s\n",p->id,p->name,p->category);
+    printf("COST: %.2f |PRICE: %.2f |QTY: %d |SOLD: %d\n",p->costPrice,p->sellingPrice,p->quantity,p->quantitySold);
+    printf("PERISHABLE: %s |DAYS IN STOCK: %d\n",p->isPerishable?"YES":"NO",p->daysInStock);
+}else{
+char key[50];
+printf("ENTER NAME KEYWORD:  \n");
+fgets(key,50,stdin);
+key[strcspn(key,"\n")]='\0';
+int found=0;
+for (int i=0; i<produceCount;i++){
+    if(strstr(inventory[i].name,key)!=NULL){
+        printf("[%d] %s\n",inventory[i].id,inventory[i].name);
+        found=1;
+    }
+}
+if(!found) printf("[!] No match for '%s'.\n",key);
+}
+}
+//updateProduce()
+void updateProduce(){
+int id;
+printf("\nENTER PRODUCE ID TO UPDATE:  ");
+scanf("%d",&id);
+clearBuffer();
+int idx=findById(id);
+if (idx==-1){printf("[!] NOT FOUND.\n"); return;}
+Produce*p=&inventory[idx];
+printf("CURRENT NAME: %s\nNEW NAME (ENTER TO KEEP): ",p->name);
+char tmp[50];
+fgets(tmp,50,stdin);
+if (tmp[0] !='\n'){
+    tmp[strcspn(tmp,"\n")]='\0';
+    strcpy(p->name,tmp);
+}
+printf("CURRENT SELLING PRICE: %.2f\nNEW PRICE(0 TO KEEP): ");
+float np;
+scanf("%f",&np);
+clearBuffer();
+if (np>0) p->sellingPrice=np;
+printf("CURRENT QUANTITY: %d\nNEW QUANTITY (-1 TO KEEP): ");
+int nq;
+scanf("%d",&nq);
+clearBuffer();
+if(nq>=0)p->quantity=nq;
+p->daysInStock=computeDayInStock(p->stockDate);
+printf("[+]RECORD UPDATED.\n");
+}
+
+//deleteProduce()
+void deleteProduce(){
+int id;
+printf("\nENTER PRODUCE ID TO DELETE: ");
+scanf("%d",&id);
+clearBuffer();
+int idx=findById(id);
+if (idx==-1){printf("[!]NOT FOUND.\n"); return;}
+printf("DELETE '%s'?(y/n):",inventory[idx].name);
+char c;
+scanf("%c",&c);
+clearBuffer();
+if (c!='y' && c!='Y'){
+    printf("[-]CANCELLED.\n");return;
+}
+for (int i=idx;i<produceCount-1;i++)
+    inventory[i]=inventory[i+1];
+    produceCount--;
+    printf("[+]RECORD DELETED.\n");
+}
+
+//sellProduce-all 5 business rules
+void sellProduce(){
+int id,qty;
+printf("\n----------------------------SELL PRODUCE--------------------------------------\n");
+printf("PRODUCE ID: ");
+scanf("%d",&id);
+printf("QUANTITY: ");
+scanf("%d",&qty);
+clearBuffer();
+int idx=findById(id);
+if (idx==-1){printf("[!]NOT FOUND.\n"); return;}
+Produce*p=&inventory[idx];
+
+if (qty>p->quantity){
+    printf("[X]INSUFFICIENT STOCK! AVAILABLE: %d\n",p->quantity);
+    return;
+}
+if (p->isPerishable && p->daysInStock>PERISH_DAYS)
+    printf("[!]PERISHABILITY WARNING: %s HAS BEEN STOCKED %d DAYS!\n",p->name,p->daysInStock);
+if (p->sellingPrice<p->costPrice)
+    printf("[!]LOSS WARNING: SELLING PRICE IS BELOW COST PRICE!\n");
+
+float unitPrice=p->sellingPrice;
+if (qty>=BULK_THRESHOLD){
+    float disc=unitPrice*BULK_DISCOUNT;
+    unitPrice-=disc;
+    printf("[*]BULK DISCOUNT (10%%): -%.2f UGX/unit.NEW UNIT PRICE: %.2f\n",disc,unitPrice);
+}
+float total=unitPrice*(float)qty;
+p->quantity-=qty;
+p->quantitySold+=qty;
+p->totalRevenue+=total;
+printf("[+]SALE COMPLETE: %d x %s=%.2f UGX\n",qty,p->name,total);
+if (p->quantity<LOW_STOCK_LVL)
+    printf("[!]RESTOCK ALERT: Only %d unit(s) of '%s' left!\n",p->quantity,p->name);
+}
+
+//generateSalesReport()
+void generateSalesReport(){
+printf("\n=======================================================================================\n");
+printf("FARM PRODUCE SALES REPORT \n");
+printf("=========================================================================================\n");
+printf("%-4s %-18s %14s %9s\n","ID","NAME","SOLD","REVENUE(UGX)","STOCK");
+printf("-----------------------------------------------------------------------------------------\n");
+float totalRev=0.0f;
+int totalSold=0,topIdx=-1;
+for (int i=0; i<produceCount;i++){
+    Produce*p=&inventory[i];
+    printf("%-4d %-18s %6d %14.2f %9d\n",p->id,p->name,p->quantitySold,p->totalRevenue,p->quantity);
+    totalRev+=p->totalRevenue;
+    totalSold+=p->quantitySold;
+    if(topIdx==-1 || p->quantitySold>inventory[topIdx].quantitySold)
+        topIdx=i;
+}
+printf("---------------------------------------------------------------------------------------\n");
+printf("TOTAL SOLD: %d units\n",totalSold);
+printf("TOTAL REVENUE: %.2f UGX\n",totalRev);
+if (topIdx!=-1 && inventory[topIdx].quantitySold>0)
+    printf("TOP SELLER:%s(%d units)\n",inventory[topIdx].name,inventory[topIdx].quantitySold);
+else
+    printf("TOP SELLER: NO SALES RECORDED YET.\n");
+printf("======================================================================================\n");
+}
+
+//displayAll()
+void displayAll(){
+if (produceCount==0){printf("[!]NO PRODUCE REGISTERED.\n");return;}
+printf("\n%-4s %-18s %-12s %8s %8s %6s %s\n","ID","NAME","CATEGORY","COST","PRICE","QTY","PERISHABLE");
+printf("----------------------------------------------------------------------------------------\n");
+for (int i=0;i<produceCount;i++){
+    Produce*p=&inventory[i];
+    printf("%-4d %-18s %-12s %8.2f %6d %s",p->id,p->name,p->category,p->costPrice,p->sellingPrice,p->quantity,p->isPerishable?"YES":"NO");
+    if (p->isPerishable && p->daysInStock>PERISH_DAYS)
+        printf("<<STALE>>");
+    printf("\n");
+}
+}
+
+//HELPERS
+int findById(int id){
+for (int i=0;i<produceCount;i++)
+    if(inventory[i].id==id) return i;
+return -1;
+}
+
+void clearBuffer(){while (getchar()!='\n');}
+int computeDayInStock(const char *dateStr){
+int d,m,y;
+if (scanf(dateStr, "%d/%d/%d",&d,&m,&y)!=3)return 0;
+return (2026-y)*365+(5-m)*30+(22-d);
+}
